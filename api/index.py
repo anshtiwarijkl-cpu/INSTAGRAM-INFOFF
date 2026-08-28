@@ -20,9 +20,9 @@ CORS(app)
 # CONFIGURATION
 # ============================================================================
 
-DEVICE_ROTATION_INTERVAL = 3  # Change device every 3 requests
-PROXY_ROTATION_INTERVAL = 8   # Change proxy every 8 requests
-SPEED_CHECK_INTERVAL = 300    # Check speed every 5 minutes
+DEVICE_ROTATION_INTERVAL = 3
+PROXY_ROTATION_INTERVAL = 8
+SPEED_CHECK_INTERVAL = 300
 
 # ============================================================================
 # SPEED CHECKER
@@ -85,129 +85,46 @@ class DeviceManager:
         browsers = [
             {
                 'name': 'Chrome',
-                'version': f"{random.randint(110, 122)}.0.{random.randint(6000, 7000)}.{random.randint(0, 200)}",
                 'user_agent': f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{random.randint(110, 122)}.0.0.0 Safari/537.36",
-                'platform': 'Windows',
-                'platform_version': '10.0',
-                'cpu_cores': random.choice([4, 6, 8, 12, 16]),
-                'memory': random.choice(['8 GB', '16 GB', '32 GB'])
+                'platform': 'Windows'
             },
             {
                 'name': 'Chrome',
-                'version': f"{random.randint(110, 122)}.0.{random.randint(6000, 7000)}.{random.randint(0, 200)}",
                 'user_agent': f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_{random.randint(14, 15)}_{random.randint(0, 4)}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{random.randint(110, 122)}.0.0.0 Safari/537.36",
-                'platform': 'macOS',
-                'platform_version': f"10_{random.randint(14, 15)}_{random.randint(0, 4)}",
-                'cpu_cores': random.choice([4, 6, 8, 10, 12]),
-                'memory': random.choice(['8 GB', '16 GB', '24 GB', '32 GB'])
+                'platform': 'macOS'
             },
             {
                 'name': 'Firefox',
-                'version': f"{random.randint(115, 124)}.0",
                 'user_agent': f"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:{random.randint(115, 124)}.0) Gecko/20100101 Firefox/{random.randint(115, 124)}.0",
-                'platform': 'Windows',
-                'platform_version': '10.0',
-                'cpu_cores': random.choice([4, 6, 8, 12, 16]),
-                'memory': random.choice(['8 GB', '16 GB', '32 GB'])
+                'platform': 'Windows'
             },
             {
                 'name': 'Firefox',
-                'version': f"{random.randint(115, 124)}.0",
                 'user_agent': f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_{random.randint(14, 15)}_{random.randint(0, 4)}; rv:{random.randint(115, 124)}.0) Gecko/20100101 Firefox/{random.randint(115, 124)}.0",
-                'platform': 'macOS',
-                'platform_version': f"10_{random.randint(14, 15)}_{random.randint(0, 4)}",
-                'cpu_cores': random.choice([4, 6, 8, 10, 12]),
-                'memory': random.choice(['8 GB', '16 GB', '24 GB', '32 GB'])
+                'platform': 'macOS'
             },
             {
                 'name': 'Edge',
-                'version': f"{random.randint(110, 122)}.0.{random.randint(2000, 3000)}.{random.randint(0, 200)}",
                 'user_agent': f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{random.randint(110, 122)}.0.0.0 Safari/537.36 Edg/{random.randint(110, 122)}.0.0.0",
-                'platform': 'Windows',
-                'platform_version': '10.0',
-                'cpu_cores': random.choice([4, 6, 8, 12, 16]),
-                'memory': random.choice(['8 GB', '16 GB', '32 GB'])
+                'platform': 'Windows'
             },
             {
                 'name': 'Safari',
-                'version': f"{random.randint(16, 17)}.{random.randint(0, 1)}",
                 'user_agent': f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_{random.randint(14, 15)}_{random.randint(0, 4)}) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/{random.randint(16, 17)}.0 Safari/605.1.15",
-                'platform': 'macOS',
-                'platform_version': f"10_{random.randint(14, 15)}_{random.randint(0, 4)}",
-                'cpu_cores': random.choice([4, 6, 8, 10]),
-                'memory': random.choice(['8 GB', '16 GB', '24 GB'])
+                'platform': 'macOS'
             }
         ]
         
-        screens = [
-            (1920, 1080), (2560, 1440), (3840, 2160),
-            (1366, 768), (1536, 864), (1440, 900),
-            (1600, 900), (1280, 720), (1920, 1200),
-            (2560, 1600), (3440, 1440), (1360, 768)
-        ]
+        languages = ['en-US', 'en-GB', 'en-IN', 'es-ES', 'fr-FR', 'de-DE']
         
-        languages = ['en-US', 'en-GB', 'en-IN', 'en-AU', 'en-CA', 
-                    'es-ES', 'fr-FR', 'de-DE', 'it-IT', 'pt-BR',
-                    'ja-JP', 'ko-KR', 'zh-CN', 'ru-RU', 'ar-SA']
-        
-        timezones = ['America/New_York', 'America/Los_Angeles', 'Europe/London', 
-                    'Europe/Paris', 'Asia/Kolkata', 'Asia/Tokyo', 'Australia/Sydney',
-                    'America/Sao_Paulo', 'Africa/Johannesburg', 'Asia/Dubai',
-                    'America/Chicago', 'America/Toronto', 'Europe/Berlin']
-        
-        gpus = [
-            'NVIDIA GeForce RTX 3060', 'NVIDIA GeForce RTX 3070', 'NVIDIA GeForce RTX 3080',
-            'NVIDIA GeForce RTX 3090', 'NVIDIA GeForce RTX 4060', 'NVIDIA GeForce RTX 4070',
-            'NVIDIA GeForce RTX 4080', 'NVIDIA GeForce RTX 4090', 'AMD Radeon RX 6800 XT',
-            'AMD Radeon RX 6900 XT', 'AMD Radeon RX 7800 XT', 'AMD Radeon RX 7900 XTX',
-            'Intel Iris Xe Graphics', 'Intel UHD Graphics 620', 'Apple M1 GPU',
-            'Apple M2 GPU', 'Apple M3 GPU'
-        ]
-        
-        fonts = [
-            'Arial, Helvetica, sans-serif',
-            'Times New Roman, Times, serif',
-            'Courier New, Courier, monospace',
-            'Georgia, serif',
-            'Verdana, Arial, sans-serif',
-            'Tahoma, Arial, sans-serif',
-            'Trebuchet MS, Arial, sans-serif',
-            'Helvetica Neue, Arial, sans-serif'
-        ]
-        
-        # Generate 10 different devices
+        # Generate 10 devices
         for i in range(10):
             browser = random.choice(browsers)
-            screen = random.choice(screens)
-            
             device = {
                 'id': f"device_{i+1}_{hashlib.md5(str(time.time() + random.random()).encode()).hexdigest()[:8]}",
                 'browser': browser,
-                'screen': {
-                    'width': screen[0],
-                    'height': screen[1],
-                    'color_depth': random.choice([24, 30, 32]),
-                    'pixel_ratio': round(random.uniform(1, 3), 1)
-                },
                 'language': random.choice(languages),
-                'timezone': random.choice(timezones),
                 'platform': browser['platform'],
-                'platform_version': browser['platform_version'],
-                'cpu_cores': browser['cpu_cores'],
-                'memory': browser['memory'],
-                'gpu': random.choice(gpus),
-                'fonts': random.choice(fonts),
-                'canvas_hash': hashlib.md5(str(random.randint(1, 99999999)).encode()).hexdigest()[:16],
-                'webgl_hash': hashlib.md5(str(random.randint(1, 99999999)).encode()).hexdigest()[:16],
-                'audio_hash': hashlib.md5(str(random.randint(1, 99999999)).encode()).hexdigest()[:16],
-                'webgl_vendor': random.choice(['Google Inc.', 'Apple Inc.', 'Mozilla Foundation', 'NVIDIA Corporation', 'AMD', 'Intel Corporation']),
-                'webgl_renderer': random.choice([
-                    'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080, Direct3D11 vs_5_0 ps_5_0, D3D11)', 
-                    'ANGLE (AMD, AMD Radeon RX 6800 XT, Direct3D11 vs_5_0 ps_5_0, D3D11)',
-                    'ANGLE (Intel, Intel(R) UHD Graphics 620, Direct3D11 vs_5_0 ps_5_0, D3D11)',
-                    'ANGLE (NVIDIA, NVIDIA GeForce RTX 4090, Direct3D12 vs_6_0 ps_6_0, D3D12)',
-                    'ANGLE (AMD, AMD Radeon RX 7900 XTX, Direct3D12 vs_6_0 ps_6_0, D3D12)'
-                ]),
                 'created_at': datetime.now().isoformat()
             }
             self.devices.append(device)
@@ -220,14 +137,8 @@ class DeviceManager:
             self.request_count += 1
             if self.request_count % self.rotation_interval == 0:
                 self.current_index = (self.current_index + 1) % len(self.devices)
-                print(f"🔄 Rotated device to {self.current_index + 1}")
             
             return self.devices[self.current_index]
-    
-    def get_current_device(self):
-        if not self.devices:
-            return None
-        return self.devices[self.current_index]
     
     def get_stats(self):
         return {
@@ -235,13 +146,13 @@ class DeviceManager:
             "current_index": self.current_index + 1,
             "request_count": self.request_count,
             "rotation_interval": self.rotation_interval,
-            "current_device": self.get_current_device()['browser']['name'] if self.get_current_device() else None
+            "current_device": self.devices[self.current_index]['browser']['name'] if self.devices else None
         }
 
 device_manager = DeviceManager()
 
 # ============================================================================
-# PROXY MANAGER - Webshare Proxies
+# PROXY MANAGER - FIXED
 # ============================================================================
 
 class ProxyManager:
@@ -255,6 +166,7 @@ class ProxyManager:
     
     def load_proxies(self, proxy_file):
         try:
+            # Try to load from file
             if os.path.exists(proxy_file):
                 with open(proxy_file, 'r') as f:
                     for line in f:
@@ -263,7 +175,8 @@ class ProxyManager:
                             self.proxies.append(line)
                 print(f"✅ Loaded {len(self.proxies)} proxies from {proxy_file}")
             else:
-                # Default Webshare proxies
+                print(f"⚠️ File {proxy_file} not found, using default proxies")
+                # Default Webshare proxies from your screenshot
                 self.proxies = [
                     "yywgbajj:ddd3c4hnpxer8@31.59.20.176:6754",
                     "yywgbajj:ddd3c4hnpxer8@45.38.107.97:6014",
@@ -274,13 +187,18 @@ class ProxyManager:
                     "yywgbajj:ddd3c4hnpxer8@142.111.67.146:5611",
                     "yywgbajj:ddd3c4hnpxer8@191.96.254.138:6185"
                 ]
-                print(f"⚠️ Using {len(self.proxies)} default proxies")
+                print(f"✅ Using {len(self.proxies)} default proxies")
             
+            # Shuffle for randomness
             random.shuffle(self.proxies)
             
         except Exception as e:
             print(f"❌ Error loading proxies: {e}")
-            self.proxies = []
+            # Fallback proxies
+            self.proxies = [
+                "yywgbajj:ddd3c4hnpxer8@31.59.20.176:6754",
+                "yywgbajj:ddd3c4hnpxer8@45.38.107.97:6014"
+            ]
     
     def get_next_proxy(self):
         with self.lock:
@@ -294,25 +212,22 @@ class ProxyManager:
             
             return self.proxies[self.current_index]
     
-    def get_proxy_url(self, proxy_string):
-        if not proxy_string:
-            return None
-        return f"http://{proxy_string}"
-    
     def get_current_proxy(self):
         if not self.proxies:
             return None
         return self.proxies[self.current_index]
     
     def get_stats(self):
+        current = self.get_current_proxy()
         return {
             "total_proxies": len(self.proxies),
             "current_index": self.current_index + 1,
             "request_count": self.request_count,
             "rotation_interval": self.rotation_interval,
-            "current_proxy": self.get_current_proxy().split('@')[-1] if self.get_current_proxy() else None
+            "current_proxy": current.split('@')[-1] if current and '@' in current else current
         }
 
+# Initialize proxy manager
 proxy_manager = ProxyManager()
 
 # ============================================================================
@@ -354,20 +269,7 @@ class InstagramScanner:
                         'http': proxy_url,
                         'https': proxy_url
                     }
-                    print(f"🌐 Using proxy: {proxy_string.split('@')[-1]}")
-            
-            # Set headers
-            if hasattr(self.loader, 'context') and hasattr(self.loader.context, '_session'):
-                headers = {
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                    'Accept-Language': f"{device['language']},en;q=0.9",
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'Connection': 'keep-alive',
-                    'Sec-Ch-Ua': f'"{device["browser"]["name"]}"; v="120"',
-                    'Sec-Ch-Ua-Platform': f'"{device["platform"]}"'
-                }
-                for key, value in headers.items():
-                    self.loader.context._session.headers.update({key: value})
+                    print(f"🌐 Using proxy: {proxy_string.split('@')[-1] if '@' in proxy_string else proxy_string}")
             
             return True
             
@@ -395,15 +297,15 @@ class InstagramScanner:
     def scan_profile(self, username):
         start_time = time.time()
         
-        # 1. Get device (rotates every 3 requests)
+        # 1. Get device
         device = device_manager.get_next_device()
         if not device:
             return {"status": "error", "error": "No device available"}
         
-        # 2. Get proxy (rotates every 8 requests)
+        # 2. Get proxy
         proxy_string = proxy_manager.get_next_proxy()
         
-        # 3. Initialize loader with device and proxy
+        # 3. Initialize loader
         if not self.initialize_loader(device, proxy_string):
             return {"status": "error", "error": "Failed to initialize loader"}
         
@@ -411,8 +313,6 @@ class InstagramScanner:
             profile = Profile.from_username(self.loader.context, username)
             
             response_time = (time.time() - start_time) * 1000
-            
-            # Add to speed checker
             speed_checker.add_response_time(response_time)
             speed_checker.check_speed()
             
@@ -459,10 +359,9 @@ class InstagramScanner:
         except instaloader.exceptions.PrivateProfileNotFollowedException:
             return {"status": "error", "error": "Private profile", "username": username}
         except instaloader.exceptions.QueryReturnedBadRequestException:
-            # Rate limit - rotate proxy and device
             proxy_manager.current_index = (proxy_manager.current_index + 1) % len(proxy_manager.proxies)
             device_manager.current_index = (device_manager.current_index + 1) % len(device_manager.devices)
-            return {"status": "error", "error": "Rate limit - rotated proxy & device", "username": username}
+            return {"status": "error", "error": "Rate limit - rotated", "username": username}
         except Exception as e:
             return {"status": "error", "error": str(e), "username": username}
     
@@ -503,10 +402,7 @@ def home():
             "/health": "GET - Health check",
             "/api/scan?username=NAME": "GET - Scan profile",
             "/api/scan/NAME": "GET - Scan profile",
-            "/api/stats": "GET - All stats",
-            "/api/device-stats": "GET - Device stats",
-            "/api/proxy-stats": "GET - Proxy stats",
-            "/api/speed-stats": "GET - Speed stats"
+            "/api/stats": "GET - All stats"
         }
     })
 
@@ -515,9 +411,7 @@ def health():
     return jsonify({
         "status": "ok",
         "timestamp": datetime.now().isoformat(),
-        "device_stats": device_manager.get_stats(),
-        "proxy_stats": proxy_manager.get_stats(),
-        "speed_stats": speed_checker.get_status()
+        "proxy_stats": proxy_manager.get_stats()
     })
 
 @app.route('/api/stats')
@@ -527,18 +421,6 @@ def stats():
         "proxy_stats": proxy_manager.get_stats(),
         "speed_stats": speed_checker.get_status()
     })
-
-@app.route('/api/device-stats')
-def device_stats():
-    return jsonify(device_manager.get_stats())
-
-@app.route('/api/proxy-stats')
-def proxy_stats():
-    return jsonify(proxy_manager.get_stats())
-
-@app.route('/api/speed-stats')
-def speed_stats():
-    return jsonify(speed_checker.get_status())
 
 @app.route('/api/scan')
 def scan():
@@ -582,13 +464,7 @@ def scan_path(username):
 def not_found(e):
     return jsonify({
         "status": "error",
-        "error": "Endpoint not found",
-        "available": ["/", "/health", "/api/stats", "/api/scan?username=NAME", "/api/scan/NAME"]
+        "error": "Endpoint not found"
     }), 404
 
-@app.errorhandler(500)
-def internal_error(e):
-    return jsonify({
-        "status": "error",
-        "error": "Internal server error"
-    })
+app.debug = False

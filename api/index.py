@@ -22,7 +22,7 @@ CORS(app)
 
 DEVICE_ROTATION_INTERVAL = 3  # Change device every 3 requests
 PROXY_ROTATION_INTERVAL = 8   # Change proxy every 8 requests
-SPEED_CHECK_INTERVAL = 300    # Check speed every 5 minutes (300 seconds)
+SPEED_CHECK_INTERVAL = 300    # Check speed every 5 minutes
 
 # ============================================================================
 # SPEED CHECKER
@@ -69,7 +69,7 @@ class SpeedChecker:
 speed_checker = SpeedChecker()
 
 # ============================================================================
-# DEVICE MANAGER - Rotates device every 3 requests
+# DEVICE MANAGER
 # ============================================================================
 
 class DeviceManager:
@@ -82,8 +82,6 @@ class DeviceManager:
         self._generate_devices()
     
     def _generate_devices(self):
-        """Generate multiple device fingerprints"""
-        
         browsers = [
             {
                 'name': 'Chrome',
@@ -215,7 +213,6 @@ class DeviceManager:
             self.devices.append(device)
     
     def get_next_device(self):
-        """Get next device in rotation"""
         with self.lock:
             if not self.devices:
                 return None
@@ -223,7 +220,7 @@ class DeviceManager:
             self.request_count += 1
             if self.request_count % self.rotation_interval == 0:
                 self.current_index = (self.current_index + 1) % len(self.devices)
-                print(f"🔄 Rotated device to index {self.current_index + 1}")
+                print(f"🔄 Rotated device to {self.current_index + 1}")
             
             return self.devices[self.current_index]
     
@@ -244,7 +241,7 @@ class DeviceManager:
 device_manager = DeviceManager()
 
 # ============================================================================
-# PROXY MANAGER
+# PROXY MANAGER - Webshare Proxies
 # ============================================================================
 
 class ProxyManager:
@@ -264,10 +261,20 @@ class ProxyManager:
                         line = line.strip()
                         if line and not line.startswith('#'):
                             self.proxies.append(line)
-                print(f"✅ Loaded {len(self.proxies)} proxies")
+                print(f"✅ Loaded {len(self.proxies)} proxies from {proxy_file}")
             else:
-                self.proxies = ["yvwgbajj:dd3c4hnpxer8@31.59.20.176:6754"]
-                print(f"⚠️ Using default proxy")
+                # Default Webshare proxies
+                self.proxies = [
+                    "yywgbajj:ddd3c4hnpxer8@31.59.20.176:6754",
+                    "yywgbajj:ddd3c4hnpxer8@45.38.107.97:6014",
+                    "yywgbajj:ddd3c4hnpxer8@198.105.121.200:6462",
+                    "yywgbajj:ddd3c4hnpxer8@64.137.96.74:6641",
+                    "yywgbajj:ddd3c4hnpxer8@198.23.243.226:6361",
+                    "yywgbajj:ddd3c4hnpxer8@84.247.60.125:6095",
+                    "yywgbajj:ddd3c4hnpxer8@142.111.67.146:5611",
+                    "yywgbajj:ddd3c4hnpxer8@191.96.254.138:6185"
+                ]
+                print(f"⚠️ Using {len(self.proxies)} default proxies")
             
             random.shuffle(self.proxies)
             
@@ -347,6 +354,7 @@ class InstagramScanner:
                         'http': proxy_url,
                         'https': proxy_url
                     }
+                    print(f"🌐 Using proxy: {proxy_string.split('@')[-1]}")
             
             # Set headers
             if hasattr(self.loader, 'context') and hasattr(self.loader.context, '_session'):
@@ -583,10 +591,4 @@ def internal_error(e):
     return jsonify({
         "status": "error",
         "error": "Internal server error"
-    }), 500
-
-# ============================================================================
-# VERCEL
-# ============================================================================
-
-app.debug = False
+    })

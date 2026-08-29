@@ -1,470 +1,721 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+"""
+Instagram Scanner API - Vercel Serverless Deployment
+Converted for Vercel serverless functions
+"""
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
 import instaloader
-import random
 import time
-import hashlib
-import platform
-import re
 import json
-import sys
+import random
+import hashlib
+import requests
+import uuid
 import os
-import threading
-from datetime import datetime, timedelta
+import re
+from datetime import datetime
 from instaloader import Instaloader, Profile
-
-app = Flask(__name__)
-CORS(app)
-
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
-
-DEVICE_ROTATION_INTERVAL = 3
-PROXY_ROTATION_INTERVAL = 8
-SPEED_CHECK_INTERVAL = 300
+import traceback
+from requests.auth import HTTPProxyAuth
+from contextlib import asynccontextmanager
+import asyncio
+from threading import Lock
 
 # ============================================================================
-# SPEED CHECKER
+# PROXY LIST WITH AUTHENTICATION
 # ============================================================================
 
-class SpeedChecker:
+PROXY_LIST = [
+    {"ip": "31.59.20.176", "port": "6754", "username": "ANSHBR01", "password": "BRO12341", "country": "GB", "city": "London"},
+    {"ip": "45.38.107.97", "port": "6014", "username": "ANSHBR01", "password": "BRO12341", "country": "GB", "city": "London"},
+    {"ip": "198.105.121.200", "port": "6462", "username": "ANSHBR01", "password": "BRO12341", "country": "GB", "city": "London"},
+    {"ip": "64.137.96.74", "port": "6641", "username": "ANSHBR01", "password": "BRO12341", "country": "ES", "city": "Madrid"},
+    {"ip": "198.23.243.226", "port": "6361", "username": "ANSHBR01", "password": "BRO12341", "country": "US", "city": "Los Angeles"},
+    {"ip": "84.247.60.125", "port": "6095", "username": "ANSHBR01", "password": "BRO12341", "country": "US", "city": "Piscataway"},
+    {"ip": "142.111.67.146", "port": "5611", "username": "ANSHBR01", "password": "BRO12341", "country": "JP", "city": "Tokyo"},
+    {"ip": "191.96.254.138", "port": "6185", "username": "ANSHBR01", "password": "BRO12341", "country": "US", "city": "Los Angeles"},
+    {"ip": "31.58.9.4", "port": "6077", "username": "ANSHBR01", "password": "BRO12341", "country": "DE", "city": "Frankfurt"},
+]
+
+# ============================================================================
+# COUNTRY TO LANGUAGE MAPPING
+# ============================================================================
+
+COUNTRY_LANGUAGE = {
+    'US': 'en-US', 'GB': 'en-GB', 'IN': 'en-IN', 'AU': 'en-AU', 'CA': 'en-CA',
+    'DE': 'de-DE', 'FR': 'fr-FR', 'ES': 'es-ES', 'IT': 'it-IT', 'JP': 'ja-JP',
+    'CN': 'zh-CN', 'KR': 'ko-KR', 'BR': 'pt-BR', 'RU': 'ru-RU', 'NL': 'nl-NL',
+    'SE': 'sv-SE', 'NO': 'no-NO', 'DK': 'da-DK', 'FI': 'fi-FI', 'PL': 'pl-PL',
+    'TR': 'tr-TR', 'AR': 'ar-SA', 'IL': 'he-IL', 'ZA': 'en-ZA', 'NZ': 'en-NZ',
+    'SG': 'en-SG', 'MY': 'en-MY', 'PH': 'en-PH', 'PK': 'en-PK', 'BD': 'en-BD',
+    'EG': 'ar-EG', 'SA': 'ar-SA', 'AE': 'ar-AE', 'KW': 'ar-KW', 'QA': 'ar-QA',
+    'OM': 'ar-OM', 'BH': 'ar-BH',
+}
+
+# ============================================================================
+# PYDANTIC MODELS FOR API
+# ============================================================================
+
+class ScanRequest(BaseModel):
+    username: str = Field(..., description="Instagram username to scan")
+    country_code: Optional[str] = Field("US", description="Country code for language preferences")
+    use_proxy: Optional[bool] = Field(True, description="Use proxy for scanning")
+
+class ScanResponse(BaseModel):
+    status: str
+    collected_at: str
+    response_time_seconds: float
+    profile: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    proxy_used: Optional[Dict[str, str]] = None
+
+# ============================================================================
+# FINGERPRINT GENERATOR
+# ============================================================================
+
+class Fingerprint:
     def __init__(self):
-        self.last_check = datetime.now()
-        self.response_times = []
-        self.average_speed = 0
-        self.status = "unknown"
-        self.lock = threading.Lock()
+        self.fingerprint = {}
+        self.counter = 0
+        self._generate()
     
-    def add_response_time(self, time_ms):
-        with self.lock:
-            self.response_times.append(time_ms)
-            if len(self.response_times) > 100:
-                self.response_times.pop(0)
-            self.average_speed = sum(self.response_times) / len(self.response_times)
-    
-    def check_speed(self):
-        with self.lock:
-            now = datetime.now()
-            if (now - self.last_check).seconds >= SPEED_CHECK_INTERVAL:
-                self.last_check = now
-                if self.average_speed > 5000:
-                    self.status = "slow"
-                elif self.average_speed > 2000:
-                    self.status = "medium"
-                else:
-                    self.status = "fast"
-                return True
-            return False
-    
-    def get_status(self):
-        self.check_speed()
-        return {
-            "status": self.status,
-            "average_response_ms": round(self.average_speed, 2),
-            "total_requests": len(self.response_times),
-            "last_check": self.last_check.isoformat()
-        }
-
-speed_checker = SpeedChecker()
-
-# ============================================================================
-# DEVICE MANAGER
-# ============================================================================
-
-class DeviceManager:
-    def __init__(self):
-        self.devices = []
-        self.current_index = 0
-        self.request_count = 0
-        self.rotation_interval = DEVICE_ROTATION_INTERVAL
-        self.lock = threading.Lock()
-        self._generate_devices()
-    
-    def _generate_devices(self):
+    def _generate_browser(self):
         browsers = [
             {
                 'name': 'Chrome',
-                'user_agent': f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{random.randint(110, 122)}.0.0.0 Safari/537.36",
-                'platform': 'Windows'
+                'versions': ['120.0.6099.109', '120.0.6099.129', '120.0.6099.199', 
+                            '121.0.6167.85', '121.0.6167.160', '122.0.6261.69',
+                            '123.0.6312.58', '123.0.6312.86', '124.0.6367.91'],
+                'user_agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{version} Safari/537.36"
             },
             {
                 'name': 'Chrome',
-                'user_agent': f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_{random.randint(14, 15)}_{random.randint(0, 4)}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{random.randint(110, 122)}.0.0.0 Safari/537.36",
-                'platform': 'macOS'
+                'versions': ['120.0.6099.109', '121.0.6167.85', '122.0.6261.69'],
+                'user_agent': "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{version} Safari/537.36"
             },
             {
                 'name': 'Firefox',
-                'user_agent': f"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:{random.randint(115, 124)}.0) Gecko/20100101 Firefox/{random.randint(115, 124)}.0",
-                'platform': 'Windows'
+                'versions': ['121.0', '122.0', '123.0', '124.0', '125.0'],
+                'user_agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:{version}.0) Gecko/20100101 Firefox/{version}.0"
             },
             {
                 'name': 'Firefox',
-                'user_agent': f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_{random.randint(14, 15)}_{random.randint(0, 4)}; rv:{random.randint(115, 124)}.0) Gecko/20100101 Firefox/{random.randint(115, 124)}.0",
-                'platform': 'macOS'
+                'versions': ['121.0', '122.0', '123.0', '124.0', '125.0'],
+                'user_agent': "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7; rv:{version}.0) Gecko/20100101 Firefox/{version}.0"
             },
             {
                 'name': 'Edge',
-                'user_agent': f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{random.randint(110, 122)}.0.0.0 Safari/537.36 Edg/{random.randint(110, 122)}.0.0.0",
-                'platform': 'Windows'
+                'versions': ['120.0.2210.91', '120.0.2210.133', '121.0.2277.128'],
+                'user_agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/{version}"
             },
-            {
-                'name': 'Safari',
-                'user_agent': f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_{random.randint(14, 15)}_{random.randint(0, 4)}) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/{random.randint(16, 17)}.0 Safari/605.1.15",
-                'platform': 'macOS'
-            }
         ]
-        
-        languages = ['en-US', 'en-GB', 'en-IN', 'es-ES', 'fr-FR', 'de-DE']
-        
-        # Generate 10 devices
-        for i in range(10):
-            browser = random.choice(browsers)
-            device = {
-                'id': f"device_{i+1}_{hashlib.md5(str(time.time() + random.random()).encode()).hexdigest()[:8]}",
-                'browser': browser,
-                'language': random.choice(languages),
-                'platform': browser['platform'],
-                'created_at': datetime.now().isoformat()
-            }
-            self.devices.append(device)
-    
-    def get_next_device(self):
-        with self.lock:
-            if not self.devices:
-                return None
-            
-            self.request_count += 1
-            if self.request_count % self.rotation_interval == 0:
-                self.current_index = (self.current_index + 1) % len(self.devices)
-            
-            return self.devices[self.current_index]
-    
-    def get_stats(self):
+        browser = random.choice(browsers)
+        version = random.choice(browser['versions'])
+        ua = browser['user_agent'].replace('{version}', version)
         return {
-            "total_devices": len(self.devices),
-            "current_index": self.current_index + 1,
-            "request_count": self.request_count,
-            "rotation_interval": self.rotation_interval,
-            "current_device": self.devices[self.current_index]['browser']['name'] if self.devices else None
+            'name': browser['name'],
+            'version': version,
+            'user_agent': ua
         }
+    
+    def _generate_screen(self):
+        screens = [
+            (1920, 1080), (2560, 1440), (3840, 2160),
+            (1366, 768), (1536, 864), (1440, 900),
+            (1600, 900), (1280, 720), (1920, 1200),
+        ]
+        width, height = random.choice(screens)
+        return {
+            'width': width,
+            'height': height,
+            'color_depth': random.choice([24, 30, 32]),
+        }
+    
+    def _generate_os(self):
+        os_list = [
+            {'name': 'Windows', 'version': '10.0'},
+            {'name': 'Windows', 'version': '11.0'},
+            {'name': 'macOS', 'version': '10.15.7'},
+            {'name': 'macOS', 'version': '11.0.1'},
+            {'name': 'macOS', 'version': '12.0.1'},
+            {'name': 'macOS', 'version': '13.0'},
+            {'name': 'macOS', 'version': '14.0'},
+        ]
+        return random.choice(os_list)
+    
+    def _get_language_for_country(self, country_code):
+        return COUNTRY_LANGUAGE.get(country_code, 'en-US')
+    
+    def _generate(self, country_code='US'):
+        self.counter += 1
+        browser = self._generate_browser()
+        screen = self._generate_screen()
+        os_info = self._generate_os()
+        language = self._get_language_for_country(country_code)
+        delay_between_requests = random.uniform(3.0, 8.0)
+        
+        self.fingerprint = {
+            'browser': browser,
+            'screen': screen,
+            'os': os_info,
+            'language': language,
+            'country': country_code,
+            'fingerprint_id': hashlib.md5(str(time.time() + random.random()).encode()).hexdigest()[:16],
+            'session_id': str(uuid.uuid4())[:8],
+            'generation': self.counter,
+            'delay_between_requests': delay_between_requests,
+        }
+    
+    def get(self):
+        return self.fingerprint
+    
+    def rotate(self, country_code='US'):
+        self._generate(country_code)
+        return self.fingerprint
+    
+    def get_headers(self):
+        fp = self.fingerprint
+        headers = {
+            'User-Agent': fp['browser']['user_agent'],
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': f"{fp['language']},en;q=0.9",
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
+            'DNT': '1',
+        }
+        if fp['browser']['name'] in ['Chrome', 'Edge']:
+            headers['Sec-Ch-Ua'] = f'"{fp["browser"]["name"]}"; v="{fp["browser"]["version"].split(".")[0]}"'
+            headers['Sec-Ch-Ua-Mobile'] = '?0'
+            headers['Sec-Ch-Ua-Platform'] = f'"{fp["os"]["name"]}"'
+        return headers
+    
+    def get_random_delay(self):
+        return self.fingerprint['delay_between_requests']
 
-device_manager = DeviceManager()
 
 # ============================================================================
-# PROXY MANAGER - FIXED
+# PROXY MANAGER WITH AUTHENTICATION
 # ============================================================================
 
 class ProxyManager:
-    def __init__(self, proxy_file='proxies.txt'):
-        self.proxies = []
+    def __init__(self, proxy_list):
+        self.all_proxies = proxy_list
+        self.working_proxies = []
+        self.failed_proxies = []
         self.current_index = 0
         self.request_count = 0
-        self.rotation_interval = PROXY_ROTATION_INTERVAL
-        self.lock = threading.Lock()
-        self.load_proxies(proxy_file)
+        self.lock = Lock()
+        self._test_all_proxies()
     
-    def load_proxies(self, proxy_file):
+    def _test_proxy(self, proxy):
         try:
-            # Try to load from file
-            if os.path.exists(proxy_file):
-                with open(proxy_file, 'r') as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith('#'):
-                            self.proxies.append(line)
-                print(f"✅ Loaded {len(self.proxies)} proxies from {proxy_file}")
-            else:
-                print(f"⚠️ File {proxy_file} not found, using default proxies")
-                # Default Webshare proxies from your screenshot
-                self.proxies = [
-                    "yywgbajj:ddd3c4hnpxer8@31.59.20.176:6754",
-                    "yywgbajj:ddd3c4hnpxer8@45.38.107.97:6014",
-                    "yywgbajj:ddd3c4hnpxer8@198.105.121.200:6462",
-                    "yywgbajj:ddd3c4hnpxer8@64.137.96.74:6641",
-                    "yywgbajj:ddd3c4hnpxer8@198.23.243.226:6361",
-                    "yywgbajj:ddd3c4hnpxer8@84.247.60.125:6095",
-                    "yywgbajj:ddd3c4hnpxer8@142.111.67.146:5611",
-                    "yywgbajj:ddd3c4hnpxer8@191.96.254.138:6185"
-                ]
-                print(f"✅ Using {len(self.proxies)} default proxies")
+            proxy_url = f"http://{proxy['ip']}:{proxy['port']}"
+            proxies = {"http": proxy_url, "https": proxy_url}
+            auth = HTTPProxyAuth(proxy['username'], proxy['password'])
             
-            # Shuffle for randomness
-            random.shuffle(self.proxies)
-            
-        except Exception as e:
-            print(f"❌ Error loading proxies: {e}")
-            # Fallback proxies
-            self.proxies = [
-                "yywgbajj:ddd3c4hnpxer8@31.59.20.176:6754",
-                "yywgbajj:ddd3c4hnpxer8@45.38.107.97:6014"
-            ]
+            response = requests.get(
+                "https://api.ipify.org?format=json",
+                proxies=proxies,
+                auth=auth,
+                timeout=10,
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            )
+            return response.status_code == 200
+        except:
+            return False
     
-    def get_next_proxy(self):
+    def _test_all_proxies(self):
+        self.working_proxies = []
+        self.failed_proxies = []
+        for proxy in self.all_proxies:
+            if self._test_proxy(proxy):
+                self.working_proxies.append(proxy)
+            else:
+                self.failed_proxies.append(proxy)
+            time.sleep(0.3)
+        if not self.working_proxies:
+            self.working_proxies = self.all_proxies.copy()
+    
+    def get_proxy(self):
         with self.lock:
-            if not self.proxies:
+            if not self.working_proxies:
                 return None
-            
             self.request_count += 1
-            if self.request_count % self.rotation_interval == 0:
-                self.current_index = (self.current_index + 1) % len(self.proxies)
-                print(f"🔄 Rotated proxy to {self.current_index + 1}")
-            
-            return self.proxies[self.current_index]
+            self.current_index = (self.current_index + 1) % len(self.working_proxies)
+            return self.working_proxies[self.current_index]
+    
+    def get_proxy_with_auth(self):
+        proxy = self.get_proxy()
+        if not proxy:
+            return None, None, None, None
+        proxy_url = f"http://{proxy['ip']}:{proxy['port']}"
+        return proxy_url, proxy['username'], proxy['password'], proxy.get('country', 'US')
     
     def get_current_proxy(self):
-        if not self.proxies:
-            return None
-        return self.proxies[self.current_index]
+        with self.lock:
+            if not self.working_proxies:
+                return None
+            if self.current_index >= len(self.working_proxies):
+                self.current_index = 0
+            return self.working_proxies[self.current_index]
+    
+    def mark_failed(self, proxy):
+        with self.lock:
+            if proxy in self.working_proxies:
+                self.working_proxies.remove(proxy)
+                self.failed_proxies.append(proxy)
+                if self.current_index >= len(self.working_proxies):
+                    self.current_index = 0
     
     def get_stats(self):
-        current = self.get_current_proxy()
         return {
-            "total_proxies": len(self.proxies),
-            "current_index": self.current_index + 1,
-            "request_count": self.request_count,
-            "rotation_interval": self.rotation_interval,
-            "current_proxy": current.split('@')[-1] if current and '@' in current else current
+            "total": len(self.all_proxies),
+            "working": len(self.working_proxies),
+            "failed": len(self.failed_proxies)
         }
 
-# Initialize proxy manager
-proxy_manager = ProxyManager()
 
 # ============================================================================
-# CORS
+# INSTAGRAM SCANNER - VERCELL VERSION
 # ============================================================================
 
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
-
-# ============================================================================
-# INSTAGRAM SCANNER
-# ============================================================================
-
-class InstagramScanner:
+class InstagramScannerVercel:
     def __init__(self):
+        self.fingerprint = Fingerprint()
+        self.proxy_manager = ProxyManager(PROXY_LIST)
         self.loader = None
+        self.request_counter = 0
+        self.success_count = 0
+        self.fail_count = 0
+        self.last_request_time = 0
+        self.session_cookies = {}
+        self.start_time = time.time()
+        self.lock = Lock()
     
-    def initialize_loader(self, device, proxy_string=None):
+    def _wait_between_requests(self):
+        with self.lock:
+            now = time.time()
+            delay = self.fingerprint.get_random_delay()
+            elapsed = now - self.last_request_time
+            if elapsed < delay:
+                sleep_time = delay - elapsed + random.uniform(0.5, 2.0)
+                time.sleep(sleep_time)
+            self.last_request_time = time.time()
+    
+    def _create_session(self, country_code='US'):
         try:
-            user_agent = device['browser']['user_agent']
+            fp = self.fingerprint.rotate(country_code)
+            proxy_url, username, password, proxy_country = self.proxy_manager.get_proxy_with_auth()
+            proxy_info = self.proxy_manager.get_current_proxy()
+            
+            session = requests.Session()
+            if proxy_url and username and password:
+                session.proxies.update({
+                    "http": proxy_url,
+                    "https": proxy_url
+                })
+                session.auth = HTTPProxyAuth(username, password)
+            
+            headers = self.fingerprint.get_headers()
+            for key, value in headers.items():
+                session.headers.update({key: value})
+            
+            session.headers.update({
+                'Origin': 'https://www.instagram.com',
+                'Referer': 'https://www.instagram.com/',
+            })
+            
+            if self.session_cookies:
+                session.cookies.update(self.session_cookies)
             
             self.loader = Instaloader(
                 max_connection_attempts=3,
-                request_timeout=30,
-                user_agent=user_agent,
+                request_timeout=60,
                 sleep=True,
-                quiet=True
+                quiet=True,
+                user_agent=fp['browser']['user_agent']
             )
-            
-            # Set proxy
-            if proxy_string:
-                proxy_url = f"http://{proxy_string}"
-                if hasattr(self.loader, 'context') and hasattr(self.loader.context, '_session'):
-                    self.loader.context._session.proxies = {
-                        'http': proxy_url,
-                        'https': proxy_url
-                    }
-                    print(f"🌐 Using proxy: {proxy_string.split('@')[-1] if '@' in proxy_string else proxy_string}")
-            
-            return True
-            
+            self.loader.context._session = session
+            time.sleep(random.uniform(0.5, 1.5))
+            return True, fp, proxy_info
         except Exception as e:
-            print(f"❌ Loader error: {e}")
-            return False
+            return False, None, None
     
-    def estimate_creation_year(self, user_id):
-        ranges = [
-            (1, 2010), (100000, 2011), (1000000, 2011), (10000000, 2012),
-            (50000000, 2013), (100000000, 2014), (300000000, 2015),
-            (500000000, 2016), (1000000000, 2017), (3000000000, 2018),
-            (5000000000, 2019), (8000000000, 2020), (12000000000, 2021),
-            (18000000000, 2022), (25000000000, 2023), (35000000000, 2024),
-        ]
+    def _estimate_year(self, user_id):
         try:
             uid = int(user_id)
+            ranges = [
+                (1, 2010), (100000, 2011), (1000000, 2011), (10000000, 2012),
+                (50000000, 2013), (100000000, 2014), (300000000, 2015),
+                (500000000, 2016), (1000000000, 2017), (3000000000, 2018),
+                (5000000000, 2019), (8000000000, 2020), (12000000000, 2021),
+                (18000000000, 2022), (25000000000, 2023), (35000000000, 2024),
+                (45000000000, 2025),
+            ]
             for max_id, year in ranges:
                 if uid <= max_id:
                     return year
+            return None
         except:
-            pass
-        return None
+            return None
     
-    def scan_profile(self, username):
+    def scan(self, username, country_code='US', use_proxy=True):
         start_time = time.time()
-        
-        # 1. Get device
-        device = device_manager.get_next_device()
-        if not device:
-            return {"status": "error", "error": "No device available"}
-        
-        # 2. Get proxy
-        proxy_string = proxy_manager.get_next_proxy()
-        
-        # 3. Initialize loader
-        if not self.initialize_loader(device, proxy_string):
-            return {"status": "error", "error": "Failed to initialize loader"}
+        proxy_info = None
         
         try:
-            profile = Profile.from_username(self.loader.context, username)
+            with self.lock:
+                self.request_counter += 1
+                self._wait_between_requests()
             
-            response_time = (time.time() - start_time) * 1000
-            speed_checker.add_response_time(response_time)
-            speed_checker.check_speed()
+            if use_proxy:
+                proxy_url, username_proxy, password_proxy, country_code = self.proxy_manager.get_proxy_with_auth()
+                proxy_info = self.proxy_manager.get_current_proxy()
+            
+            if not proxy_url:
+                country_code = 'US'
+            
+            success, fp, proxy_info = self._create_session(country_code)
+            if not success:
+                with self.lock:
+                    self.fail_count += 1
+                return {
+                    "status": "error",
+                    "error": "Failed to create session",
+                    "collected_at": datetime.now().isoformat()
+                }
+            
+            profile = None
+            max_retries = 2
+            
+            for attempt in range(max_retries):
+                try:
+                    if attempt > 0:
+                        success, fp, proxy_info = self._create_session(country_code)
+                        if not success:
+                            continue
+                    profile = Profile.from_username(self.loader.context, username)
+                    break
+                except instaloader.exceptions.LoginRequiredException:
+                    time.sleep(random.uniform(3, 5))
+                    continue
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        time.sleep(random.uniform(5, 8))
+                        continue
+                    else:
+                        raise e
+            
+            if profile is None:
+                raise Exception("Could not fetch profile")
+            
+            is_business = getattr(profile, 'is_business_account', False)
+            is_professional = getattr(profile, 'is_professional_account', False)
+            category = getattr(profile, 'category_name', None)
+            business_category = getattr(profile, 'business_category_name', None)
+            highlight_count = getattr(profile, 'highlight_reel_count', 0)
+            has_highlights = getattr(profile, 'has_highlight_reels', False)
+            is_joined_recently = getattr(profile, 'is_joined_recently', False)
+            
+            bio_links = []
+            try:
+                if hasattr(profile, 'biography_links'):
+                    for link in profile.biography_links:
+                        if isinstance(link, dict) and 'url' in link:
+                            bio_links.append(link['url'])
+                        elif isinstance(link, str):
+                            bio_links.append(link)
+            except:
+                pass
+            
+            response_time = (time.time() - start_time)
             
             result = {
                 "status": "ok",
-                "device_used": {
-                    "id": device['id'],
-                    "browser": device['browser']['name'],
-                    "platform": device['platform'],
-                    "language": device['language']
-                },
-                "proxy_used": proxy_string.split('@')[-1] if proxy_string and '@' in proxy_string else proxy_string,
-                "speed_status": speed_checker.get_status(),
                 "collected_at": datetime.now().isoformat(),
-                "response_time_seconds": round(response_time / 1000, 3),
+                "response_time_seconds": round(response_time, 3),
+                "proxy_used": {
+                    "ip": proxy_info['ip'] if proxy_info else None,
+                    "port": proxy_info['port'] if proxy_info else None,
+                    "country": proxy_info.get('country', 'Unknown') if proxy_info else None
+                } if proxy_info else None,
                 "profile": {
+                    "id": str(profile.userid),
                     "username": profile.username,
-                    "user_id": str(profile.userid),
-                    "full_name": profile.full_name,
-                    "biography": profile.biography[:500] if profile.biography else 'No bio available',
-                    "business_category": getattr(profile, 'business_category_name', None),
-                    "is_business_account": getattr(profile, 'is_business_account', False),
-                    "is_professional_account": getattr(profile, 'is_professional_account', False),
-                    "category_name": getattr(profile, 'category_name', None),
+                    "full_name": profile.full_name or 'N/A',
+                    "biography": (profile.biography[:200] if profile.biography else 'No bio available'),
+                    "is_private": profile.is_private,
+                    "is_verified": profile.is_verified,
+                    "is_business_account": is_business,
+                    "is_professional_account": is_professional,
+                    "category_name": category,
+                    "business_category_name": business_category,
+                    "profile_pic_url_hd": getattr(profile, 'profile_pic_url_hd', None) or getattr(profile, 'profile_pic_url', None),
+                    "external_url": profile.external_url or None,
                     "followers": profile.followers,
                     "following": profile.followees,
                     "posts": profile.mediacount,
-                    "igtv_count": getattr(profile, 'igtv_count', 0),
-                    "is_private": profile.is_private,
-                    "is_verified": profile.is_verified,
-                    "has_highlights": getattr(profile, 'has_highlight_reels', False),
-                    "external_url": profile.external_url,
-                    "profile_pic_url": profile.profile_pic_url,
-                    "bio_links": self._extract_bio_links(profile),
-                    "account_creation_year": self.estimate_creation_year(profile.userid),
-                    "is_joined_recently": getattr(profile, 'is_joined_recently', False),
+                    "account_creation_year": self._estimate_year(profile.userid),
+                    "has_highlights": has_highlights or highlight_count > 0,
+                    "is_joined_recently": is_joined_recently,
+                    "bio_links": bio_links
                 }
             }
+            
+            with self.lock:
+                self.success_count += 1
+            
+            if hasattr(self.loader.context, '_session'):
+                with self.lock:
+                    self.session_cookies = self.loader.context._session.cookies.get_dict()
             
             return result
             
         except instaloader.exceptions.ProfileNotExistsException:
-            return {"status": "error", "error": "Profile does not exist", "username": username}
+            with self.lock:
+                self.fail_count += 1
+            return {
+                "status": "error",
+                "error": f"Profile @{username} does not exist",
+                "collected_at": datetime.now().isoformat()
+            }
         except instaloader.exceptions.PrivateProfileNotFollowedException:
-            return {"status": "error", "error": "Private profile", "username": username}
-        except instaloader.exceptions.QueryReturnedBadRequestException:
-            proxy_manager.current_index = (proxy_manager.current_index + 1) % len(proxy_manager.proxies)
-            device_manager.current_index = (device_manager.current_index + 1) % len(device_manager.devices)
-            return {"status": "error", "error": "Rate limit - rotated", "username": username}
+            with self.lock:
+                self.fail_count += 1
+            return {
+                "status": "error",
+                "error": f"Profile @{username} is private",
+                "collected_at": datetime.now().isoformat()
+            }
+        except instaloader.exceptions.LoginRequiredException:
+            with self.lock:
+                self.fail_count += 1
+            if proxy_info:
+                self.proxy_manager.mark_failed(proxy_info)
+            return {
+                "status": "error",
+                "error": "Login required",
+                "collected_at": datetime.now().isoformat()
+            }
+        except instaloader.exceptions.ConnectionException as e:
+            with self.lock:
+                self.fail_count += 1
+            return {
+                "status": "error",
+                "error": f"Connection error: {str(e)[:100]}",
+                "collected_at": datetime.now().isoformat()
+            }
         except Exception as e:
-            return {"status": "error", "error": str(e), "username": username}
+            error_str = str(e)
+            if any(x in error_str.lower() for x in ['401', '403', '429', 'rate', 'wait', 'block']):
+                with self.lock:
+                    self.fail_count += 1
+                if proxy_info:
+                    self.proxy_manager.mark_failed(proxy_info)
+                return {
+                    "status": "error",
+                    "error": f"Rate limited: {error_str[:100]}",
+                    "collected_at": datetime.now().isoformat()
+                }
+            else:
+                with self.lock:
+                    self.fail_count += 1
+                return {
+                    "status": "error",
+                    "error": f"Error: {error_str[:100]}",
+                    "collected_at": datetime.now().isoformat()
+                }
     
-    def _extract_bio_links(self, profile):
-        bio_links = []
-        try:
-            if hasattr(profile, 'biography_links'):
-                for link in profile.biography_links:
-                    if isinstance(link, dict) and 'url' in link:
-                        bio_links.append(link['url'])
-                    elif isinstance(link, str):
-                        bio_links.append(link)
-        except:
-            pass
-        return bio_links
-
-# ============================================================================
-# API ROUTES
-# ============================================================================
-
-scanner = InstagramScanner()
-
-@app.route('/')
-def home():
-    return jsonify({
-        "name": "Instagram Scanner API",
-        "version": "4.0.0",
-        "status": "running",
-        "rotation_config": {
-            "device_rotation": f"{DEVICE_ROTATION_INTERVAL} requests",
-            "proxy_rotation": f"{PROXY_ROTATION_INTERVAL} requests",
-            "speed_check": f"{SPEED_CHECK_INTERVAL} seconds"
-        },
-        "device_stats": device_manager.get_stats(),
-        "proxy_stats": proxy_manager.get_stats(),
-        "speed_stats": speed_checker.get_status(),
-        "endpoints": {
-            "/health": "GET - Health check",
-            "/api/scan?username=NAME": "GET - Scan profile",
-            "/api/scan/NAME": "GET - Scan profile",
-            "/api/stats": "GET - All stats"
+    def get_stats(self):
+        total = self.success_count + self.fail_count
+        return {
+            "requests": self.request_counter,
+            "success": self.success_count,
+            "fail": self.fail_count,
+            "success_rate": round((self.success_count / total * 100) if total > 0 else 0, 1),
+            "proxy_stats": self.proxy_manager.get_stats()
         }
-    })
+    
+    def get_uptime(self):
+        return time.time() - self.start_time
 
-@app.route('/health')
-def health():
-    return jsonify({
-        "status": "ok",
-        "timestamp": datetime.now().isoformat(),
-        "proxy_stats": proxy_manager.get_stats()
-    })
-
-@app.route('/api/stats')
-def stats():
-    return jsonify({
-        "device_stats": device_manager.get_stats(),
-        "proxy_stats": proxy_manager.get_stats(),
-        "speed_stats": speed_checker.get_status()
-    })
-
-@app.route('/api/scan')
-def scan():
-    username = request.args.get('username', '').strip()
-    
-    if not username:
-        return jsonify({"error": "Username required"}), 400
-    
-    result = scanner.scan_profile(username)
-    
-    if result.get('status') == 'error':
-        return jsonify(result), 404
-    
-    return jsonify({
-        "status": "success",
-        "data": result
-    })
-
-@app.route('/api/scan/<username>')
-def scan_path(username):
-    username = username.strip().replace('@', '')
-    
-    if not username:
-        return jsonify({"error": "Username required"}), 400
-    
-    result = scanner.scan_profile(username)
-    
-    if result.get('status') == 'error':
-        return jsonify(result), 404
-    
-    return jsonify({
-        "status": "success",
-        "data": result
-    })
 
 # ============================================================================
-# ERROR HANDLERS
+# FASTAPI APPLICATION FOR VERCEL
 # ============================================================================
 
-@app.errorhandler(404)
-def not_found(e):
-    return jsonify({
-        "status": "error",
-        "error": "Endpoint not found"
-    }), 404
+# Global scanner instance (will be initialized on first request)
+scanner = None
 
-app.debug = False
+def get_scanner():
+    global scanner
+    if scanner is None:
+        scanner = InstagramScannerVercel()
+    return scanner
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup - initialize scanner
+    get_scanner()
+    print("✅ Instagram Scanner API initialized for Vercel")
+    yield
+    # Shutdown
+    print("👋 Shutting down...")
+
+app = FastAPI(
+    title="Instagram Scanner API",
+    description="API for scanning Instagram profiles with proxy rotation and fingerprint management",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# ============================================================================
+# API ENDPOINTS
+# ============================================================================
+
+@app.get("/")
+async def root():
+    return {
+        "message": "Instagram Scanner API",
+        "version": "1.0.0",
+        "deployment": "Vercel",
+        "endpoints": {
+            "/scan": "POST - Scan Instagram profile",
+            "/health": "GET - Health check",
+            "/stats": "GET - Scanner statistics",
+            "/docs": "GET - API documentation"
+        }
+    }
+
+@app.get("/health")
+async def health_check():
+    try:
+        scanner = get_scanner()
+        stats = scanner.get_stats()
+        return {
+            "status": "healthy",
+            "version": "1.0.0",
+            "uptime_seconds": round(scanner.get_uptime(), 1),
+            "proxy_count": stats["proxy_stats"]["total"],
+            "working_proxy_count": stats["proxy_stats"]["working"],
+            "stats": {
+                "requests": stats["requests"],
+                "success": stats["success"],
+                "fail": stats["fail"],
+                "success_rate": stats["success_rate"]
+            }
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "error": str(e)}
+        )
+
+@app.get("/stats")
+async def get_stats():
+    try:
+        scanner = get_scanner()
+        return scanner.get_stats()
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+@app.post("/scan", response_model=ScanResponse)
+async def scan_profile(request: ScanRequest):
+    try:
+        scanner = get_scanner()
+        result = scanner.scan(
+            username=request.username,
+            country_code=request.country_code,
+            use_proxy=request.use_proxy
+        )
+        
+        if result.get("status") == "error":
+            return ScanResponse(
+                status="error",
+                collected_at=result.get("collected_at", datetime.now().isoformat()),
+                response_time_seconds=0,
+                error=result.get("error")
+            )
+        
+        return ScanResponse(
+            status=result.get("status", "ok"),
+            collected_at=result.get("collected_at", datetime.now().isoformat()),
+            response_time_seconds=result.get("response_time_seconds", 0),
+            profile=result.get("profile"),
+            proxy_used=result.get("proxy_used")
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/scan/bulk")
+async def scan_bulk_profiles(usernames: List[str], country_code: str = "US", use_proxy: bool = True):
+    try:
+        scanner = get_scanner()
+        if len(usernames) > 20:
+            raise HTTPException(status_code=400, detail="Maximum 20 usernames per request")
+        
+        results = []
+        for username in usernames:
+            result = scanner.scan(
+                username=username,
+                country_code=country_code,
+                use_proxy=use_proxy
+            )
+            results.append(result)
+            await asyncio.sleep(2)
+        
+        return {
+            "status": "completed",
+            "total": len(usernames),
+            "results": results
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/proxy/status")
+async def proxy_status():
+    try:
+        scanner = get_scanner()
+        return scanner.proxy_manager.get_stats()
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+@app.post("/proxy/refresh")
+async def refresh_proxies():
+    try:
+        scanner = get_scanner()
+        scanner.proxy_manager._test_all_proxies()
+        return {
+            "status": "refreshed",
+            "working": len(scanner.proxy_manager.working_proxies),
+            "failed": len(scanner.proxy_manager.failed_proxies)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# VERCEL SERVERLESS HANDLER
+# ============================================================================
+
+# This is the entry point for Vercel
+# The app object will be exported as a serverless function
+
+# For local development
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "instagram_scanner_vercel:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=False,
+        workers=1
+    )

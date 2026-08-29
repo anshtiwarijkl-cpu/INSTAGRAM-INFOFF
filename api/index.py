@@ -234,16 +234,28 @@ class ProxyManager:
             return False
     
     def _test_all_proxies(self):
+        """Test all proxies and update working/failed lists"""
         self.working_proxies = []
         self.failed_proxies = []
+        
+        print(f"🔍 Testing {len(self.all_proxies)} proxies...")
+        
         for proxy in self.all_proxies:
             if self._test_proxy(proxy):
                 self.working_proxies.append(proxy)
+                print(f"  ✅ {proxy['ip']}:{proxy['port']} - WORKING")
             else:
                 self.failed_proxies.append(proxy)
+                print(f"  ❌ {proxy['ip']}:{proxy['port']} - FAILED")
             time.sleep(0.3)
+        
+        # 🔥 FIX: Agar koi working proxy nahi hai, toh failed_proxies ko clear karo
         if not self.working_proxies:
+            print("⚠️ No working proxies! Using first proxy anyway...")
             self.working_proxies = self.all_proxies.copy()
+            self.failed_proxies = []  # 🔥 Clear failed proxies
+        
+        print(f"✅ Working: {len(self.working_proxies)}, Failed: {len(self.failed_proxies)}")
     
     def get_proxy(self):
         with self.lock:
@@ -273,16 +285,17 @@ class ProxyManager:
             if proxy in self.working_proxies:
                 self.working_proxies.remove(proxy)
                 self.failed_proxies.append(proxy)
+                print(f"⚠️ Removed {proxy['ip']}:{proxy['port']} from working proxies")
                 if self.current_index >= len(self.working_proxies):
                     self.current_index = 0
     
     def get_stats(self):
+        """Return proxy statistics"""
         return {
             "total": len(self.all_proxies),
             "working": len(self.working_proxies),
             "failed": len(self.failed_proxies)
         }
-
 
 # ============================================================================
 # INSTAGRAM SCANNER - VERCELL VERSION

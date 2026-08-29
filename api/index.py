@@ -1,9 +1,9 @@
 """
 Instagram Scanner API - Vercel Serverless Deployment
-Converted for Vercel serverless functions
+Supports GET request with scan=username parameter
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
@@ -589,7 +589,8 @@ async def root():
         "version": "1.0.0",
         "deployment": "Vercel",
         "endpoints": {
-            "/scan": "POST - Scan Instagram profile",
+            "/scan": "POST - Scan Instagram profile (JSON body)",
+            "/scan?username=xyz": "GET - Scan Instagram profile (URL param)",
             "/health": "GET - Health check",
             "/stats": "GET - Scanner statistics",
             "/docs": "GET - API documentation"
@@ -628,8 +629,65 @@ async def get_stats():
     except Exception as e:
         raise HTTPException(status_code=503, detail=str(e))
 
+# ============================================================================
+# 🔥 NEW - GET REQUEST WITH scan=username PARAMETER
+# ============================================================================
+
+@app.get("/scan")
+async def scan_profile_get(
+    username: str = Query(..., description="Instagram username to scan"),
+    country_code: str = Query("US", description="Country code for language preferences"),
+    use_proxy: bool = Query(True, description="Use proxy for scanning")
+):
+    """
+    Scan Instagram profile using GET request with query parameters.
+    
+    Example: https://instagram-infoff.vercel.app/scan?username=instagram
+    """
+    try:
+        scanner = get_scanner()
+        result = scanner.scan(
+            username=username,
+            country_code=country_code,
+            use_proxy=use_proxy
+        )
+        
+        if result.get("status") == "error":
+            return JSONResponse(
+                status_code=404 if "does not exist" in result.get("error", "") else 400,
+                content={
+                    "status": "error",
+                    "collected_at": result.get("collected_at", datetime.now().isoformat()),
+                    "error": result.get("error")
+                }
+            )
+        
+        return {
+            "status": result.get("status", "ok"),
+            "collected_at": result.get("collected_at", datetime.now().isoformat()),
+            "response_time_seconds": result.get("response_time_seconds", 0),
+            "profile": result.get("profile"),
+            "proxy_used": result.get("proxy_used")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# POST REQUEST - Same as before (JSON body)
+# ============================================================================
+
 @app.post("/scan", response_model=ScanResponse)
-async def scan_profile(request: ScanRequest):
+async def scan_profile_post(request: ScanRequest):
+    """
+    Scan Instagram profile using POST request with JSON body.
+    
+    Example: 
+    {
+        "username": "instagram",
+        "country_code": "US",
+        "use_proxy": true
+    }
+    """
     try:
         scanner = get_scanner()
         result = scanner.scan(
@@ -656,8 +714,17 @@ async def scan_profile(request: ScanRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============================================================================
+# BULK SCAN - POST Request
+# ============================================================================
+
 @app.post("/scan/bulk")
 async def scan_bulk_profiles(usernames: List[str], country_code: str = "US", use_proxy: bool = True):
+    """
+    Scan multiple Instagram profiles using POST request.
+    
+    Example: ["instagram", "narendra_modi"]
+    """
     try:
         scanner = get_scanner()
         if len(usernames) > 20:
@@ -680,6 +747,10 @@ async def scan_bulk_profiles(usernames: List[str], country_code: str = "US", use
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# PROXY ENDPOINTS
+# ============================================================================
 
 @app.get("/proxy/status")
 async def proxy_status():
@@ -705,9 +776,6 @@ async def refresh_proxies():
 # ============================================================================
 # VERCEL SERVERLESS HANDLER
 # ============================================================================
-
-# This is the entry point for Vercel
-# The app object will be exported as a serverless function
 
 # For local development
 if __name__ == "__main__":

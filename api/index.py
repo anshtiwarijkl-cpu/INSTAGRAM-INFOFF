@@ -25,23 +25,20 @@ import asyncio
 from threading import Lock
 
 # ============================================================================
-# PROXY LIST WITH AUTHENTICATION
+# PROXY LIST WITH AUTHENTICATION - UPDATED WITH ALL 6 PROXIES
 # ============================================================================
 
 PROXY_LIST = [
-    {"ip": "31.59.20.176", "port": "6754", "username": "ANSHBR01", "password": "BRO12341", "country": "GB", "city": "London"},
-    {"ip": "45.38.107.97", "port": "6014", "username": "ANSHBR01", "password": "BRO12341", "country": "GB", "city": "London"},
-    {"ip": "198.105.121.200", "port": "6462", "username": "ANSHBR01", "password": "BRO12341", "country": "GB", "city": "London"},
-    {"ip": "64.137.96.74", "port": "6641", "username": "ANSHBR01", "password": "BRO12341", "country": "ES", "city": "Madrid"},
-    {"ip": "198.23.243.226", "port": "6361", "username": "ANSHBR01", "password": "BRO12341", "country": "US", "city": "Los Angeles"},
-    {"ip": "84.247.60.125", "port": "6095", "username": "ANSHBR01", "password": "BRO12341", "country": "US", "city": "Piscataway"},
-    {"ip": "142.111.67.146", "port": "5611", "username": "ANSHBR01", "password": "BRO12341", "country": "JP", "city": "Tokyo"},
-    {"ip": "191.96.254.138", "port": "6185", "username": "ANSHBR01", "password": "BRO12341", "country": "US", "city": "Los Angeles"},
-    {"ip": "31.58.9.4", "port": "6077", "username": "ANSHBR01", "password": "BRO12341", "country": "DE", "city": "Frankfurt"},
+    {"ip": "65.108.159.129", "port": "999", "username": "", "password": "", "country": "FI", "city": "Helsinki"},
+    {"ip": "65.108.159.129", "port": "4145", "username": "", "password": "", "country": "FI", "city": "Helsinki"},
+    {"ip": "65.108.159.129", "port": "3128", "username": "", "password": "", "country": "FI", "city": "Helsinki"},
+    {"ip": "34.166.25.120", "port": "8080", "username": "", "password": "", "country": "SA", "city": "Riyadh"},
+    {"ip": "65.108.159.129", "port": "5153", "username": "", "password": "", "country": "FI", "city": "Helsinki"},
+    {"ip": "128.199.121.61", "port": "9090", "username": "", "password": "", "country": "SG", "city": "Singapore"},
 ]
 
 # ============================================================================
-# COUNTRY TO LANGUAGE MAPPING
+# COUNTRY TO LANGUAGE MAPPING - UPDATED
 # ============================================================================
 
 COUNTRY_LANGUAGE = {
@@ -220,12 +217,11 @@ class ProxyManager:
         try:
             proxy_url = f"http://{proxy['ip']}:{proxy['port']}"
             proxies = {"http": proxy_url, "https": proxy_url}
-            auth = HTTPProxyAuth(proxy['username'], proxy['password'])
             
+            # Test without auth (since these proxies don't need authentication)
             response = requests.get(
                 "https://api.ipify.org?format=json",
                 proxies=proxies,
-                auth=auth,
                 timeout=10,
                 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
             )
@@ -249,11 +245,11 @@ class ProxyManager:
                 print(f"  ❌ {proxy['ip']}:{proxy['port']} - FAILED")
             time.sleep(0.3)
         
-        # 🔥 FIX: Agar koi working proxy nahi hai, toh failed_proxies ko clear karo
+        # If no working proxies, use all proxies anyway
         if not self.working_proxies:
-            print("⚠️ No working proxies! Using first proxy anyway...")
+            print("⚠️ No working proxies! Using all proxies anyway...")
             self.working_proxies = self.all_proxies.copy()
-            self.failed_proxies = []  # 🔥 Clear failed proxies
+            self.failed_proxies = []
         
         print(f"✅ Working: {len(self.working_proxies)}, Failed: {len(self.failed_proxies)}")
     
@@ -270,7 +266,10 @@ class ProxyManager:
         if not proxy:
             return None, None, None, None
         proxy_url = f"http://{proxy['ip']}:{proxy['port']}"
-        return proxy_url, proxy['username'], proxy['password'], proxy.get('country', 'US')
+        # No authentication needed for these proxies
+        username = proxy.get('username', '')
+        password = proxy.get('password', '')
+        return proxy_url, username, password, proxy.get('country', 'US')
     
     def get_current_proxy(self):
         with self.lock:
@@ -331,12 +330,14 @@ class InstagramScannerVercel:
             proxy_info = self.proxy_manager.get_current_proxy()
             
             session = requests.Session()
-            if proxy_url and username and password:
+            if proxy_url:
                 session.proxies.update({
                     "http": proxy_url,
                     "https": proxy_url
                 })
-                session.auth = HTTPProxyAuth(username, password)
+                # Only set auth if username and password are provided
+                if username and password:
+                    session.auth = HTTPProxyAuth(username, password)
             
             headers = self.fingerprint.get_headers()
             for key, value in headers.items():
@@ -602,10 +603,11 @@ async def root():
         "version": "1.0.0",
         "deployment": "Vercel",
         "endpoints": {
+            "/scan": "GET - Scan Instagram profile (URL param: ?username=xyz)",
             "/scan": "POST - Scan Instagram profile (JSON body)",
-            "/scan?username=xyz": "GET - Scan Instagram profile (URL param)",
             "/health": "GET - Health check",
             "/stats": "GET - Scanner statistics",
+            "/proxy/status": "GET - Proxy status",
             "/docs": "GET - API documentation"
         }
     }
@@ -643,7 +645,7 @@ async def get_stats():
         raise HTTPException(status_code=503, detail=str(e))
 
 # ============================================================================
-# 🔥 NEW - GET REQUEST WITH scan=username PARAMETER
+# GET REQUEST WITH scan=username PARAMETER
 # ============================================================================
 
 @app.get("/scan")
@@ -686,7 +688,7 @@ async def scan_profile_get(
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
-# POST REQUEST - Same as before (JSON body)
+# POST REQUEST - JSON body
 # ============================================================================
 
 @app.post("/scan", response_model=ScanResponse)

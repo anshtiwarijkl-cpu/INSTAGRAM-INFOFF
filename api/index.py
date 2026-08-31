@@ -222,10 +222,6 @@ class Fingerprint:
         return self.fingerprint['delay_between_requests']
 
 
-# ============================================================================
-# PROXY MANAGER WITH AUTHENTICATION
-# ============================================================================
-
 class ProxyManager:
     def __init__(self, proxy_list):
         self.all_proxies = proxy_list
@@ -234,43 +230,48 @@ class ProxyManager:
         self.current_index = 0
         self.request_count = 0
         self.lock = Lock()
-        self._test_all_proxies()
+        self._test_all_proxies_quick()
     
-    def _test_proxy(self, proxy):
+    def _test_proxy_quick(self, proxy):
         try:
             proxy_url = f"http://{proxy['ip']}:{proxy['port']}"
             proxies = {"http": proxy_url, "https": proxy_url}
             
-            # Test without auth (since these proxies don't need authentication)
             response = requests.get(
                 "https://api.ipify.org?format=json",
                 proxies=proxies,
-                timeout=10,
+                timeout=5,
                 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
             )
             return response.status_code == 200
         except:
             return False
     
-    def _test_all_proxies(self):
-        """Test all proxies and update working/failed lists"""
+    def _test_all_proxies_quick(self):
         self.working_proxies = []
         self.failed_proxies = []
         
         print(f"🔍 Testing {len(self.all_proxies)} proxies...")
         
-        for proxy in self.all_proxies:
-            if self._test_proxy(proxy):
+        # Sirf 5 proxies test karo (fast startup)
+        test_limit = min(5, len(self.all_proxies))
+        
+        for i, proxy in enumerate(self.all_proxies[:test_limit]):
+            if self._test_proxy_quick(proxy):
                 self.working_proxies.append(proxy)
                 print(f"  ✅ {proxy['ip']}:{proxy['port']} - WORKING")
             else:
                 self.failed_proxies.append(proxy)
                 print(f"  ❌ {proxy['ip']}:{proxy['port']} - FAILED")
-            time.sleep(0.3)
+            time.sleep(0.2)
         
-        # If no working proxies, use all proxies anyway
+        # Baaki sab proxies ko working maan lo
+        for proxy in self.all_proxies[test_limit:]:
+            self.working_proxies.append(proxy)
+            print(f"  ⏳ {proxy['ip']}:{proxy['port']} - PENDING")
+        
         if not self.working_proxies:
-            print("⚠️ No working proxies! Using all proxies anyway...")
+            print("⚠️ No working proxies! Using all proxies...")
             self.working_proxies = self.all_proxies.copy()
             self.failed_proxies = []
         
@@ -287,12 +288,9 @@ class ProxyManager:
     def get_proxy_with_auth(self):
         proxy = self.get_proxy()
         if not proxy:
-            return None, None, None, None
+            return None, None
         proxy_url = f"http://{proxy['ip']}:{proxy['port']}"
-        # No authentication needed for these proxies
-        username = proxy.get('username', '')
-        password = proxy.get('password', '')
-        return proxy_url, username, password, proxy.get('country', 'US')
+        return proxy_url, proxy.get('country', 'US')
     
     def get_current_proxy(self):
         with self.lock:
@@ -312,13 +310,11 @@ class ProxyManager:
                     self.current_index = 0
     
     def get_stats(self):
-        """Return proxy statistics"""
         return {
             "total": len(self.all_proxies),
             "working": len(self.working_proxies),
             "failed": len(self.failed_proxies)
         }
-
 # ============================================================================
 # INSTAGRAM SCANNER - VERCELL VERSION
 # ============================================================================

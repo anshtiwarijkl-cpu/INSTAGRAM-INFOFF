@@ -28,15 +28,38 @@ from threading import Lock
 # PROXY LIST WITH AUTHENTICATION - UPDATED WITH ALL 6 PROXIES
 # ============================================================================
 
+# ============================================================================
+# PROXY LIST WITH AUTHENTICATION - UPDATED WITH 10 PROXIES
+# ============================================================================
+
 PROXY_LIST = [
-    {"ip": "65.108.159.129", "port": "999", "username": "", "password": "", "country": "FI", "city": "Helsinki"},
-    {"ip": "65.108.159.129", "port": "4145", "username": "", "password": "", "country": "FI", "city": "Helsinki"},
-    {"ip": "65.108.159.129", "port": "3128", "username": "", "password": "", "country": "FI", "city": "Helsinki"},
-    {"ip": "34.166.25.120", "port": "8080", "username": "", "password": "", "country": "SA", "city": "Riyadh"},
-    {"ip": "65.108.159.129", "port": "5153", "username": "", "password": "", "country": "FI", "city": "Helsinki"},
-    {"ip": "128.199.121.61", "port": "9090", "username": "", "password": "", "country": "SG", "city": "Singapore"},
+ 
+    {"ip": "103.125.17.106", "port": "8080", "username": "", "password": "", "country": "ID", "city": "Jakarta"},
+    {"ip": "123.138.24.112", "port": "8800", "username": "", "password": "", "country": "CN", "city": "Beijing"},
+    {"ip": "176.12.72.62", "port": "3128", "username": "", "password": "", "country": "KZ", "city": "Almaty"},
+    {"ip": "5.129.214.191", "port": "8080", "username": "", "password": "", "country": "NL", "city": "Amsterdam"},
+    {"ip": "186.227.196.104", "port": "3128", "username": "", "password": "", "country": "BR", "city": "Sao Paulo"},
+    {"ip": "103.54.119.5", "port": "8000", "username": "", "password": "", "country": "HK", "city": "Hong Kong"},
+    {"ip": "185.140.232.54", "port": "8080", "username": "", "password": "", "country": "IR", "city": "Tehran"},
+    {"ip": "65.109.186.67", "port": "10808", "username": "", "password": "", "country": "FI", "city": "Helsinki"},
+    {"ip": "145.220.226.216", "port": "8080", "username": "", "password": "", "country": "DE", "city": "Berlin"},
 ]
 
+# ============================================================================
+# COUNTRY TO LANGUAGE MAPPING - UPDATED WITH NEW COUNTRIES
+# ============================================================================
+
+COUNTRY_LANGUAGE = {
+    'US': 'en-US', 'GB': 'en-GB', 'IN': 'en-IN', 'AU': 'en-AU', 'CA': 'en-CA',
+    'DE': 'de-DE', 'FR': 'fr-FR', 'ES': 'es-ES', 'IT': 'it-IT', 'JP': 'ja-JP',
+    'CN': 'zh-CN', 'KR': 'ko-KR', 'BR': 'pt-BR', 'RU': 'ru-RU', 'NL': 'nl-NL',
+    'SE': 'sv-SE', 'NO': 'no-NO', 'DK': 'da-DK', 'FI': 'fi-FI', 'PL': 'pl-PL',
+    'TR': 'tr-TR', 'AR': 'ar-SA', 'IL': 'he-IL', 'ZA': 'en-ZA', 'NZ': 'en-NZ',
+    'SG': 'en-SG', 'MY': 'en-MY', 'PH': 'en-PH', 'PK': 'en-PK', 'BD': 'en-BD',
+    'EG': 'ar-EG', 'SA': 'ar-SA', 'AE': 'ar-AE', 'KW': 'ar-KW', 'QA': 'ar-QA',
+    'OM': 'ar-OM', 'BH': 'ar-BH', 'ID': 'id-ID', 'KZ': 'kk-KZ', 'HK': 'zh-HK',
+    'IR': 'fa-IR',
+}
 # ============================================================================
 # COUNTRY TO LANGUAGE MAPPING - UPDATED
 # ============================================================================

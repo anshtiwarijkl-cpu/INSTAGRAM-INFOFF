@@ -34,15 +34,15 @@ from threading import Lock
 
 PROXY_LIST = [
  
-    {"ip": "103.125.17.106", "port": "8080", "username": "", "password": "", "country": "ID", "city": "Jakarta"},
-    {"ip": "123.138.24.112", "port": "8800", "username": "", "password": "", "country": "CN", "city": "Beijing"},
-    {"ip": "176.12.72.62", "port": "3128", "username": "", "password": "", "country": "KZ", "city": "Almaty"},
-    {"ip": "5.129.214.191", "port": "8080", "username": "", "password": "", "country": "NL", "city": "Amsterdam"},
-    {"ip": "186.227.196.104", "port": "3128", "username": "", "password": "", "country": "BR", "city": "Sao Paulo"},
-    {"ip": "103.54.119.5", "port": "8000", "username": "", "password": "", "country": "HK", "city": "Hong Kong"},
-    {"ip": "185.140.232.54", "port": "8080", "username": "", "password": "", "country": "IR", "city": "Tehran"},
-    {"ip": "65.109.186.67", "port": "10808", "username": "", "password": "", "country": "FI", "city": "Helsinki"},
-    {"ip": "145.220.226.216", "port": "8080", "username": "", "password": "", "country": "DE", "city": "Berlin"},
+    {"ip": "103.125.17.106", "port": "8080", "country": "ID", "city": "Jakarta"},
+    {"ip": "123.138.24.112", "port": "8800", "country": "CN", "city": "Beijing"},
+    {"ip": "176.12.72.62", "port": "3128", "country": "KZ", "city": "Almaty"},
+    {"ip": "5.129.214.191", "port": "8080", "country": "NL", "city": "Amsterdam"},
+    {"ip": "186.227.196.104", "port": "3128", "country": "BR", "city": "Sao Paulo"},
+    {"ip": "103.54.119.5", "port": "8000", "country": "HK", "city": "Hong Kong"},
+    {"ip": "185.140.232.54", "port": "8080", "country": "IR", "city": "Tehran"},
+    {"ip": "65.109.186.67", "port": "10808", "country": "FI", "city": "Helsinki"},
+    {"ip": "145.220.226.216", "port": "8080", "country": "DE", "city": "Berlin"},
 ]
 
 # ============================================================================
